@@ -305,8 +305,7 @@ var cache = arguments[5];
 
 var stringify = JSON.stringify;
 
-module.exports = function (fn) {
-    var keys = [];
+module.exports = function (fn, options) {
     var wkey;
     var cacheKeys = Object.keys(cache);
 
@@ -317,7 +316,7 @@ module.exports = function (fn) {
         // be an object with the default export as a property of it. To ensure
         // the existing api and babel esmodule exports are both supported we
         // check for both
-        if (exp === fn || exp.default === fn) {
+        if (exp === fn || exp && exp.default === fn) {
             wkey = key;
             break;
         }
@@ -360,9 +359,12 @@ module.exports = function (fn) {
 
     var URL = window.URL || window.webkitURL || window.mozURL || window.msURL;
 
-    return new Worker(URL.createObjectURL(
-        new Blob([src], { type: 'text/javascript' })
-    ));
+    var blob = new Blob([src], { type: 'text/javascript' });
+    if (options && options.bare) { return blob; }
+    var workerUrl = URL.createObjectURL(blob);
+    var worker = new Worker(workerUrl);
+    worker.objectURL = workerUrl;
+    return worker;
 };
 
 },{}],3:[function(require,module,exports){
@@ -3288,20 +3290,20 @@ var AES128Decrypter = function () {
 
       // pull out the words of the IV to ensure we don't modify the
       // passed-in reference and easier access
-      init0 = ~ ~initVector[0];
-      init1 = ~ ~initVector[1];
-      init2 = ~ ~initVector[2];
-      init3 = ~ ~initVector[3];
+      init0 = ~~initVector[0];
+      init1 = ~~initVector[1];
+      init2 = ~~initVector[2];
+      init3 = ~~initVector[3];
 
       // decrypt four word sequences, applying cipher-block chaining (CBC)
       // to each decrypted block
       for (wordIx = 0; wordIx < encrypted32.length; wordIx += 4) {
         // convert big-endian (network order) words into little-endian
         // (javascript order)
-        encrypted0 = ~ ~this.ntoh(encrypted32[wordIx]);
-        encrypted1 = ~ ~this.ntoh(encrypted32[wordIx + 1]);
-        encrypted2 = ~ ~this.ntoh(encrypted32[wordIx + 2]);
-        encrypted3 = ~ ~this.ntoh(encrypted32[wordIx + 3]);
+        encrypted0 = ~~this.ntoh(encrypted32[wordIx]);
+        encrypted1 = ~~this.ntoh(encrypted32[wordIx + 1]);
+        encrypted2 = ~~this.ntoh(encrypted32[wordIx + 2]);
+        encrypted3 = ~~this.ntoh(encrypted32[wordIx + 3]);
 
         // decrypt the block
         decipher.decrypt(encrypted0, encrypted1, encrypted2, encrypted3, decrypted32, wordIx);
@@ -5386,7 +5388,9 @@ var ErrorDetails = exports.ErrorDetails = {
   // Identifier for a buffer seek over hole event
   BUFFER_SEEK_OVER_HOLE: 'bufferSeekOverHole',
   // Identifier for an internal exception happening inside hls.js while handling an event
-  INTERNAL_EXCEPTION: 'internalException'
+  INTERNAL_EXCEPTION: 'internalException',
+  // Identifier for empty playlist
+  EMPTY_PLAYLIST: 'emptyPlaylist'
 };
 
 },{}],22:[function(require,module,exports){
@@ -6769,7 +6773,7 @@ var PlaylistLoader = function (_EventHandler) {
             stats.tparsed = performance.now();
             hls.trigger(_events2.default.LEVEL_LOADED, { details: levelDetails, level: id, id: id2, stats: stats });
           }
-        } else {
+        } else if (string.indexOf('#EXT-X-STREAM-INF') > 0) {
           levels = this.parseMasterPlaylist(string, url);
           // multi level playlist, parse level info
           if (levels.length) {
@@ -6777,6 +6781,8 @@ var PlaylistLoader = function (_EventHandler) {
           } else {
             hls.trigger(_events2.default.ERROR, { type: _errors.ErrorTypes.NETWORK_ERROR, details: _errors.ErrorDetails.MANIFEST_PARSING_ERROR, fatal: true, url: url, reason: 'no level found in manifest' });
           }
+        } else {
+          hls.trigger(_events2.default.ERROR, { type: _errors.ErrorTypes.OTHER_ERROR, details: _errors.ErrorDetails.EMPTY_PLAYLIST, fatal: false, url: url, reason: 'returned playlist is empty' });
         }
       } else {
         hls.trigger(_events2.default.ERROR, { type: _errors.ErrorTypes.NETWORK_ERROR, details: _errors.ErrorDetails.MANIFEST_PARSING_ERROR, fatal: true, url: url, reason: 'no EXTM3U delimiter' });
