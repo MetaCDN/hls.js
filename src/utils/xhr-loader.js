@@ -29,7 +29,7 @@ class XhrLoader {
     }
   }
 
-  load(url, responseType, onSuccess, onError, onTimeout, timeout, maxRetry, retryDelay, onProgress = null, frag = null) {
+  load(url, responseType, onSuccess, onError, onTimeout, timeout, maxRetry, retryDelay, loadingBackOff, onWarn, onProgress = null, frag = null) {
     this.url = url;
     if (frag && !isNaN(frag.byteRangeStartOffset) && !isNaN(frag.byteRangeEndOffset)) {
         this.byteRange = frag.byteRangeStartOffset + '-' + (frag.byteRangeEndOffset-1);
@@ -43,6 +43,8 @@ class XhrLoader {
     this.timeout = timeout;
     this.maxRetry = maxRetry;
     this.retryDelay = retryDelay;
+    this.loadingBackOff = loadingBackOff;
+    this.onWarn = onWarn;
     this.loadInternal();
   }
 
@@ -90,9 +92,14 @@ class XhrLoader {
           logger.warn(`${status} while loading ${this.url}, retrying in ${this.retryDelay}...`);
           this.destroy();
           window.setTimeout(this.loadInternal.bind(this), this.retryDelay);
-          // exponential backoff
-          this.retryDelay = Math.min(2 * this.retryDelay, 64000);
+          if (this.loadingBackOff) {
+            // exponential backoff
+            this.retryDelay = Math.min(2 * this.retryDelay, 64000);
+          }
           stats.retry++;
+          if (this.onWarn) {
+            this.onWarn(event);
+          }
         } else {
           window.clearTimeout(this.timeoutHandle);
           logger.error(`${status} while loading ${this.url}` );

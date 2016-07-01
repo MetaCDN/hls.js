@@ -64,7 +64,7 @@ class PlaylistLoader extends EventHandler {
     }
     this.loader = typeof(config.pLoader) !== 'undefined' ? new config.pLoader(config) : new config.loader(config);
     this.loading = true;
-    this.loader.load(url, '', this.loadsuccess.bind(this), this.loaderror.bind(this), this.loadtimeout.bind(this), timeout, retry, retryDelay);
+    this.loader.load(url, '', this.loadsuccess.bind(this), this.loaderror.bind(this), this.loadtimeout.bind(this), timeout, retry, retryDelay, config.loadingBackOff, this.loadwarn.bind(this));
   }
 
   resolve(url, baseUrl) {
@@ -274,6 +274,10 @@ class PlaylistLoader extends EventHandler {
     } else {
       hls.trigger(Event.ERROR, {type: ErrorTypes.NETWORK_ERROR, details: ErrorDetails.MANIFEST_PARSING_ERROR, fatal: true, url: url, reason: 'no EXTM3U delimiter'});
     }
+  }
+
+  loadwarn(event) {
+    this.hls.trigger(Event.WARN, { type: ErrorTypes.NETWORK_ERROR, url: this.url, loader: this.loader, response: event.currentTarget, level: this.id, id: this.id2 });
   }
 
   loaderror(event) {
