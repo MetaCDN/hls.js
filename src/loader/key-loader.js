@@ -29,7 +29,13 @@ class KeyLoader extends EventHandler {
         // if uri is different from previous one or if decrypt key not retrieved yet
       if (uri !== this.decrypturl || this.decryptkey === null) {
         var config = this.hls.config;
-        frag.loader = this.loader = new config.loader(config);
+        var kConfig = Object.create(config);
+        if (config.keyRequestWithCredential === true) {
+          kConfig.xhrSetup = function(xhr) {
+              xhr.withCredentials = true;
+          };
+        }
+        frag.loader = this.loader = new kConfig.loader(kConfig);
         this.decrypturl = uri;
         this.decryptkey = null;
         frag.loader.load(uri, 'arraybuffer', this.loadsuccess.bind(this), this.loaderror.bind(this), this.loadtimeout.bind(this), config.fragLoadingTimeOut, config.fragLoadingMaxRetry, config.fragLoadingRetryDelay, config.loadingBackOff, null, this.loadprogress.bind(this), frag);
