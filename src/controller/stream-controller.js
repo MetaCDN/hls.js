@@ -864,6 +864,11 @@ class StreamController extends EventHandler {
         sliding = 0;
 
     logger.log(`level ${newLevelId} loaded [${newDetails.startSN},${newDetails.endSN}],duration:${duration}`);
+    if (newDetails.startSN === 0) {
+      this.hls.trigger(Event.START_SN_ZERO);
+    } else if (newDetails.startSN > 0) {
+      this.hls.trigger(Event.START_SN_GREAT_THAN_ZERO);
+    }
     this.levelLastLoaded = newLevelId;
 
     if (newDetails.live) {
