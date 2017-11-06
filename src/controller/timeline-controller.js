@@ -30,6 +30,7 @@ class TimelineController extends EventHandler {
     super(hls, Event.MEDIA_ATTACHING,
                 Event.MEDIA_DETACHING,
                 Event.FRAG_PARSING_USERDATA,
+                Event.FRAG_DECRYPTED,
                 Event.MANIFEST_LOADING,
                 Event.MANIFEST_LOADED,
                 Event.FRAG_LOADED,
@@ -234,7 +235,7 @@ class TimelineController extends EventHandler {
           }
         }
         if (!textTrack) {
-            textTrack = this.createTextTrack('subtitles', track.name, track.lang);          
+            textTrack = this.createTextTrack('subtitles', track.name, track.lang);
         }
         textTrack.mode = track.default ? 'showing' : 'hidden';
         this.textTracks.push(textTrack);
@@ -253,7 +254,10 @@ class TimelineController extends EventHandler {
       var sn = frag.sn;
       // if this frag isn't contiguous, clear the parser so cues with bad start/end times aren't added to the textTrack
       if (sn !== this.lastSn + 1) {
-        this.cea608Parser.reset();
+        const cea608Parser = this.cea608Parser;
+        if (cea608Parser) {
+          cea608Parser.reset();
+        }
       }
       this.lastSn = sn;
     }
@@ -265,32 +269,67 @@ class TimelineController extends EventHandler {
           this.unparsedVttFrags.push(data);
           return;
         }
-        let vttCCs = this.vttCCs;
-        if (!vttCCs[frag.cc]) {
-          vttCCs[frag.cc] = { start: frag.start, prevCC: this.prevCC, new: true };
-          this.prevCC = frag.cc;
-        }
-        let textTracks = this.textTracks,
-          hls = this.hls;
 
-        // Parse the WebVTT file contents.
-        WebVTTParser.parse(payload, this.initPTS, vttCCs, frag.cc, function (cues) {
-            // Add cues and trigger event with success true.
-            cues.forEach(cue => {
-              textTracks[frag.trackId].addCue(cue);
-            });
-            hls.trigger(Event.SUBTITLE_FRAG_PROCESSED, {success: true, frag: frag});
-          },
-          function (e) {
-            // Something went wrong while parsing. Trigger event with success false.
-            logger.log(`Failed to parse VTT cue: ${e}`);
-            hls.trigger(Event.SUBTITLE_FRAG_PROCESSED, {success: false, frag: frag});
-          });
+        var decryptData = frag.decryptdata;
+        // If the subtitles are not encrypted, parse VTTs now. Otherwise, we need to wait.
+        if ((decryptData == null) || (decryptData.key == null) || (decryptData.method !== 'AES-128')) {
+          this._parseVTTs(frag, payload);
+        }
       }
       else {
         // In case there is no payload, finish unsuccessfully.
         this.hls.trigger(Event.SUBTITLE_FRAG_PROCESSED, {success: false, frag: frag});
       }
+    }
+  }
+
+  _parseVTTs(frag, payload) {
+    let vttCCs = this.vttCCs;
+    if (!vttCCs[frag.cc]) {
+      vttCCs[frag.cc] = { start: frag.start, prevCC: this.prevCC, new: true };
+      this.prevCC = frag.cc;
+    }
+    let textTracks = this.textTracks,
+      hls = this.hls;
+
+    // Parse the WebVTT file contents.
+    WebVTTParser.parse(payload, this.initPTS, vttCCs, frag.cc, function (cues) {
+        const currentTrack = textTracks[frag.trackId];
+        // Add cues and trigger event with success true.
+        cues.forEach(cue => {
+          // Sometimes there are cue overlaps on segmented vtts so the same
+          // cue can appear more than once in different vtt files.
+          // This avoid showing duplicated cues with same timecode and text.
+          if (!currentTrack.cues.getCueById(cue.id)) {
+            try {
+              currentTrack.addCue(cue);
+            } catch (err) {
+              const textTrackCue = new window.TextTrackCue(cue.startTime, cue.endTime, cue.text);
+              textTrackCue.id = cue.id;
+              currentTrack.addCue(textTrackCue);
+            }
+          }
+        });
+        hls.trigger(Event.SUBTITLE_FRAG_PROCESSED, {success: true, frag: frag});
+      },
+      function (e) {
+        // Something went wrong while parsing. Trigger event with success false.
+        logger.log(`Failed to parse VTT cue: ${e}`);
+        hls.trigger(Event.SUBTITLE_FRAG_PROCESSED, {success: false, frag: frag});
+      });
+  }
+
+  onFragDecrypted(data) {
+    var decryptedData = data.payload,
+        frag = data.frag;
+
+    if (frag.type === 'subtitle') {
+      if (typeof this.initPTS === 'undefined') {
+        this.unparsedVttFrags.push(data);
+        return;
+      }
+
+      this._parseVTTs(frag, decryptedData);
     }
   }
 

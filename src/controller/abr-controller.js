@@ -21,6 +21,8 @@ class AbrController extends EventHandler {
     this.lastLoadedFragLevel = 0;
     this._nextAutoLevel = -1;
     this.hls = hls;
+    this.timer = null;
+    this._bwEstimator = null;
     this.onCheck = this._abandonRulesCheck.bind(this);
   }
 
@@ -74,7 +76,7 @@ class AbrController extends EventHandler {
     let stats = loader.stats;
     /* only monitor frag retrieval time if
     (video not paused OR first fragment being loaded(ready state === HAVE_NOTHING = 0)) AND autoswitching enabled AND not lowest level (=> means that we have several levels) */
-    if (v && ((!v.paused && (v.playbackRate !== 0)) || !v.readyState) && frag.autoLevel && frag.level) {
+    if (v && stats && ((!v.paused && (v.playbackRate !== 0)) || !v.readyState) && frag.autoLevel && frag.level) {
       let requestDelay = performance.now() - stats.trequest,
           playbackRate = Math.abs(v.playbackRate);
       // monitor fragment load progress after half of expected fragment duration,to stabilize bitrate
@@ -188,10 +190,8 @@ class AbrController extends EventHandler {
   }
 
  clearTimer() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
+    clearInterval(this.timer);
+    this.timer = null;
  }
 
   // return next auto level
@@ -281,9 +281,9 @@ class AbrController extends EventHandler {
       if (adjustedbw > bitrate &&
       // fragment fetchDuration unknown OR live stream OR fragment fetchDuration less than max allowed fetch duration, then this level matches
       // we don't account for max Fetch Duration for live streams, this is to avoid switching down when near the edge of live sliding window ...
-        (!fetchDuration || live || fetchDuration < maxFetchDuration) ) {
+      // special case to support startLevel = -1 (bitrateTest) on live streams : in that case we should not exit loop so that _findBestLevel will return -1
+        (!fetchDuration || (live  && !this.bitrateTestDelay) || fetchDuration < maxFetchDuration) ) {
         // as we are looping from highest to lowest, this will return the best achievable quality level
-
         return i;
       }
     }
