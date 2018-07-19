@@ -220,7 +220,7 @@ class PlaylistLoader extends EventHandler {
 
     loaderConfig = {
       timeout : timeout,
-      maxRetry : retry ,
+      maxRetry : maxRetry ,
       retryDelay : retryDelay,
       maxRetryDelay : maxRetryDelay,
       xhr4XXRetry: config.xhr4XXRetry,
@@ -264,7 +264,7 @@ class PlaylistLoader extends EventHandler {
     else if (string.indexOf('#EXT-X-STREAM-INF') > 0)
       this._handleMasterPlaylist(response, stats, context, networkDetails);
     else
-      this.hls.trigger(Event.ERROR, {type: ErrorTypes.NETWORK_ERROR, details: ErrorDetails.EMPTY_PLAYLIST, fatal: false, url: url, reason: 'returned playlist is empty'});
+      this.hls.trigger(Event.ERROR, {type: ErrorTypes.NETWORK_ERROR, details: ErrorDetails.EMPTY_PLAYLIST, fatal: false, url: response.url, reason: 'returned playlist is empty'});
   }
 
   loaderror (response, context, networkDetails = null) {
