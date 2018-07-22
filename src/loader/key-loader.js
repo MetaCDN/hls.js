@@ -45,7 +45,7 @@ class KeyLoader extends EventHandler {
           xhr.withCredentials = true;
         };
       }
-      frag.loader = this.loaders[type] = new config.loader(config);
+      frag.loader = this.loaders[type] = new kConfig.loader(kConfig);
       this.decrypturl = uri;
       this.decryptkey = null;
 
